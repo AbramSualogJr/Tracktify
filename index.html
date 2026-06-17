@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tracktify</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <!-- PWA: installable + offline -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f0f18" media="(prefers-color-scheme: dark)" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Tracktify" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <div class="shell">
+
+    <!-- ===== Sidebar ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M2 14l4-4 3.5 3.5L16 6" />
+            <path d="M13 6h4v4" />
+          </svg>
+        </div>
+        <span class="brand-name">Tracktify</span>
+        <button class="close-btn" id="sidebarClose" aria-label="Close">✕</button>
+      </div>
+
+      <p class="nav-label">Trackers</p>
+      <nav id="sidebarNav">
+        <button class="nav-item active" data-tracker="dashboard"><span>📊</span> Dashboard</button>
+        <button class="nav-item" data-tracker="jobs"><span>💼</span> Job Applications</button>
+        <button class="nav-item" data-tracker="expenses"><span>💸</span> Expenses</button>
+        <button class="nav-item" data-tracker="events"><span>📅</span> Events</button>
+        <button class="nav-item" data-tracker="habits"><span>✅</span> Habits</button>
+        <button class="nav-item" data-tracker="water"><span>💧</span> Water</button>
+        <button class="nav-item" data-tracker="workouts"><span>🏋️</span> Workouts</button>
+        <button class="nav-item" data-tracker="sleep"><span>😴</span> Sleep</button>
+        <button class="nav-item" data-tracker="calories"><span>🍎</span> Calories</button>
+        <div id="customNav"></div>
+        <button class="nav-item nav-new" id="newTrackerBtn"><span>➕</span> New Tracker</button>
+      </nav>
+
+      <button class="theme-btn" id="themeToggle">
+        <svg class="i-sun" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round">
+          <circle cx="10" cy="10" r="3.5" />
+          <path
+            d="M10 1v2M10 17v2M1 10h2M17 10h2M3.5 3.5l1.4 1.4M15.1 15.1l1.4 1.4M3.5 16.5l1.4-1.4M15.1 4.9l1.4-1.4" />
+        </svg>
+        <svg class="i-moon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round">
+          <path d="M17.5 10.5A7.5 7.5 0 1 1 9.5 2.5 5.5 5.5 0 0 0 17.5 10.5z" />
+        </svg>
+        <span id="themeLabel">Light mode</span>
+      </button>
+    </aside>
+
+    <div class="backdrop" id="backdrop"></div>
+
+    <!-- ===== Content ===== -->
+    <div class="content">
+
+      <header class="mobile-bar">
+        <button class="hamburger" id="menuBtn" aria-label="Menu">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 5h14M3 10h14M3 15h14" />
+          </svg>
+        </button>
+        <span id="viewTitle">Dashboard</span>
+        <button class="btn-add-sm" id="mobileAddBtn">+ Add</button>
+      </header>
+
+      <main class="main">
+
+        <!-- ============================================================ -->
+        <!-- VIEW: JOBS                                                    -->
+        <!-- ============================================================ -->
+        <!-- ============================================================ -->
+        <!-- VIEW: DASHBOARD (default homepage; rendered by dashboard.js)  -->
+        <!-- ============================================================ -->
+        <div id="view-dashboard">
+          <div class="page-top">
+            <div>
+              <h1 id="dashGreeting">Dashboard</h1>
+              <p id="dashDate"></p>
+            </div>
+          </div>
+          <section class="ai-card" id="aiCard" aria-live="polite" aria-label="AI summary"></section>
+          <div class="dash-cards" id="dashCards"></div>
+          <div class="dash-cols">
+            <section class="dash-col" aria-labelledby="dashRecentH">
+              <h2 class="dash-h" id="dashRecentH">Recent activity</h2>
+              <ul class="dash-feed" id="dashRecent"></ul>
+            </section>
+            <section class="dash-col" aria-labelledby="dashUpcomingH">
+              <h2 class="dash-h" id="dashUpcomingH">Upcoming</h2>
+              <ul class="dash-feed" id="dashUpcoming"></ul>
+            </section>
+          </div>
+
+          <!-- Support card — native to the dashboard card system (uses app tokens,
+               not Ko-fi branding). Links to ko-fi.com/simplyey. -->
+          <aside class="support-card" aria-label="Support Tracktify">
+            <span class="support-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M4 9h12v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9z" />
+                <path d="M16 10h2.5a2.5 2.5 0 0 1 0 5H16" />
+                <path d="M7 3.5v1.5M10 3v2M13 3.5v1.5" />
+              </svg>
+            </span>
+            <div class="support-body">
+              <h3 class="support-title">Support the developer</h3>
+              <p class="support-text">Enjoying Tracktify? Support its continued development and future features.</p>
+            </div>
+            <a class="support-cta" href="https://ko-fi.com/simplyey" target="_blank" rel="noopener">
+              <span aria-hidden="true">☕</span> Buy me a coffee
+            </a>
+          </aside>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: JOBS                                                    -->
+        <!-- ============================================================ -->
+        <div id="view-jobs" hidden>
+          <div class="page-top">
+            <div>
+              <h1>Job Applications</h1>
+              <p>Track every role you apply to</p>
+            </div>
+            <button class="btn-add" id="addBtn">+ Add Application</button>
+          </div>
+
+          <div class="summary" id="summary"></div>
+
+          <div class="filters">
+            <button class="f-btn active" data-f="all">All</button>
+            <button class="f-btn" data-f="pending">Pending</button>
+            <button class="f-btn" data-f="no-reply">No Reply</button>
+            <button class="f-btn" data-f="approved">Approved</button>
+            <button class="f-btn" data-f="denied">Denied</button>
+          </div>
+
+          <div class="empty" id="empty">
+            <div class="empty-icon">💼</div>
+            <h2>No applications yet</h2>
+            <p>Start logging your job hunt — one entry at a time.</p>
+            <button class="btn-add" id="addBtnEmpty">+ Add Application</button>
+          </div>
+
+          <p class="no-match" id="noMatch" hidden>Nothing here for this filter.</p>
+          <ul class="item-list" id="jobList" role="list"></ul>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: EXPENSES                                                -->
+        <!-- ============================================================ -->
+        <div id="view-expenses" hidden>
+          <div class="page-top">
+            <div>
+              <h1>Expenses</h1>
+              <p>Your money, organized</p>
+            </div>
+            <div class="page-top-right">
+              <button class="currency-badge" id="currencyBadge" title="Primary currency">$ USD</button>
+              <button class="btn-add" id="addTxnBtn">+ Add Transaction</button>
+            </div>
+          </div>
+
+          <!-- Sub-tabs -->
+          <div class="exp-tabs scroll-x" id="expTabs">
+            <button class="exp-tab active" data-tab="overview">Overview</button>
+            <button class="exp-tab" data-tab="transactions">Transactions</button>
+            <button class="exp-tab" data-tab="calendar">Calendar</button>
+            <button class="exp-tab" data-tab="budgets">Budgets</button>
+            <button class="exp-tab" data-tab="goals">Goals</button>
+            <button class="exp-tab" data-tab="recurring">Recurring</button>
+            <button class="exp-tab" data-tab="reports">Reports</button>
+            <button class="exp-tab" data-tab="settings">Settings</button>
+          </div>
+
+          <div class="exp-panels">
+            <!-- Overview -->
+            <section class="exp-panel" data-panel="overview">
+              <div class="ov-stats" id="ovStats"></div>
+              <div class="ov-widgets" id="ovWidgets"></div>
+            </section>
+
+            <!-- Transactions -->
+            <section class="exp-panel" data-panel="transactions" hidden>
+              <div class="txn-controls">
+                <input class="txn-search" id="txnSearch" type="search"
+                  placeholder="🔍  Search description, notes, tags..." />
+                <div class="txn-selects">
+                  <select id="txnType" class="ctrl-sel" aria-label="Type">
+                    <option value="all">All Types</option>
+                    <option value="expense">Expenses</option>
+                    <option value="income">Income</option>
+                  </select>
+                  <select id="txnCatFilter" class="ctrl-sel" aria-label="Category"></select>
+                  <select id="txnPay" class="ctrl-sel" aria-label="Payment method">
+                    <option value="all">All Methods</option>
+                  </select>
+                  <select id="txnSort" class="ctrl-sel" aria-label="Sort">
+                    <option value="date-desc">Newest first</option>
+                    <option value="date-asc">Oldest first</option>
+                    <option value="amount-desc">Highest amount</option>
+                    <option value="amount-asc">Lowest amount</option>
+                  </select>
+                </div>
+              </div>
+              <div class="empty" id="txnEmpty">
+                <div class="empty-icon">💸</div>
+                <h2>No transactions yet</h2>
+                <p>Add an expense or income entry to get started.</p>
+                <button class="btn-add" id="txnEmptyAdd">+ Add Transaction</button>
+              </div>
+              <p class="no-match" id="txnNoMatch" hidden>Nothing matches your search.</p>
+              <ul class="item-list" id="txnList" role="list"></ul>
+            </section>
+
+            <!-- Calendar -->
+            <section class="exp-panel" data-panel="calendar" hidden>
+              <div class="cal-bar">
+                <div class="cal-nav">
+                  <button class="cal-arrow" id="calPrev" aria-label="Previous month">‹</button>
+                  <span class="cal-label" id="calLabel">—</span>
+                  <button class="cal-arrow" id="calNext" aria-label="Next month">›</button>
+                  <button class="cal-today" id="calToday">Today</button>
+                </div>
+                <div class="seg-toggle" id="calViewToggle">
+                  <button class="seg active" data-calview="calendar">Calendar</button>
+                  <button class="seg" data-calview="timeline">Timeline</button>
+                  <button class="seg" data-calview="list">List</button>
+                </div>
+              </div>
+              <div class="cal-summary" id="calSummary"></div>
+              <div id="calMount"></div>
+            </section>
+
+            <!-- Budgets -->
+            <section class="exp-panel" data-panel="budgets" hidden>
+              <div id="budgetMount"></div>
+            </section>
+
+            <!-- Goals -->
+            <section class="exp-panel" data-panel="goals" hidden>
+              <div class="panel-head">
+                <div>
+                  <h2 class="panel-title">Savings Goals</h2>
+                  <p class="panel-sub">Set targets and watch your progress grow</p>
+                </div>
+                <div class="panel-head-actions">
+                  <label class="check-inline"><input type="checkbox" id="goalShowArchived" /> Show archived</label>
+                  <button class="btn-add" id="addGoalBtn">+ New Goal</button>
+                </div>
+              </div>
+              <div id="goalMount"></div>
+            </section>
+
+            <!-- Recurring -->
+            <section class="exp-panel" data-panel="recurring" hidden>
+              <div class="panel-head">
+                <div>
+                  <h2 class="panel-title">Recurring Transactions</h2>
+                  <p class="panel-sub">Bills, subscriptions, salary &amp; more — logged automatically</p>
+                </div>
+                <button class="btn-add" id="addRecurBtn">+ New Recurring</button>
+              </div>
+              <div id="recurMount"></div>
+            </section>
+
+            <!-- Reports -->
+            <section class="exp-panel" data-panel="reports" hidden>
+              <div class="report-controls">
+                <select id="reportPeriod" class="ctrl-sel">
+                  <option value="day">Daily</option>
+                  <option value="week">Weekly</option>
+                  <option value="month" selected>Monthly</option>
+                  <option value="quarter">Quarterly</option>
+                  <option value="year">Yearly</option>
+                  <option value="custom">Custom range</option>
+                </select>
+                <div class="report-range" id="reportRange" hidden>
+                  <input type="date" id="reportFrom" class="ctrl-sel" />
+                  <span class="range-dash">→</span>
+                  <input type="date" id="reportTo" class="ctrl-sel" />
+                </div>
+                <div class="chart-type-toggle" id="chartTypeToggle">
+                  <button class="ct-btn active" data-chart="donut" title="Donut">◑</button>
+                  <button class="ct-btn" data-chart="pie" title="Pie">●</button>
+                  <button class="ct-btn" data-chart="bar" title="Bar">▮</button>
+                  <button class="ct-btn" data-chart="line" title="Line">／</button>
+                  <button class="ct-btn" data-chart="area" title="Area">◣</button>
+                  <button class="ct-btn" data-chart="stacked" title="Stacked bar">▰</button>
+                </div>
+              </div>
+              <div id="reportMount"></div>
+            </section>
+
+            <!-- Settings -->
+            <section class="exp-panel" data-panel="settings" hidden>
+              <div id="settingsMount"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: EVENTS                                                  -->
+        <!-- ============================================================ -->
+        <div id="view-events" hidden>
+          <div class="ev-shell">
+            <aside class="ev-sidebar" id="evSidebar">
+              <button class="btn-add ev-quick" id="evQuickAdd">+ Add Event</button>
+              <div class="ev-mini" id="evMini"></div>
+              <div class="ev-section">
+                <div class="ev-section-head"><span class="ev-section-title">Labels</span>
+                  <button class="ev-add-label" id="evAddLabel" title="Add label">+</button>
+                </div>
+                <div id="evLabelList"></div>
+              </div>
+              <div class="ev-section">
+                <div class="ev-section-title">Today</div>
+                <div id="evTodayList" class="ev-mini-list"></div>
+              </div>
+              <div class="ev-section">
+                <div class="ev-section-title">Upcoming</div>
+                <div id="evUpcomingList" class="ev-mini-list"></div>
+              </div>
+            </aside>
+
+            <div class="ev-main">
+              <div class="ev-toolbar">
+                <button class="ev-side-toggle" id="evSideToggle" aria-label="Toggle sidebar">☰</button>
+                <button class="ev-today-btn" id="evTodayBtn">Today</button>
+                <div class="ev-nav">
+                  <button class="ev-nav-btn" id="evPrev" aria-label="Previous">‹</button>
+                  <button class="ev-nav-btn" id="evNext" aria-label="Next">›</button>
+                </div>
+                <span class="ev-range" id="evRange">—</span>
+                <input class="ev-search" id="evSearch" type="search" placeholder="🔍  Search events..." />
+                <div class="seg-toggle ev-views" id="evViewToggle">
+                  <button class="seg active" data-evview="month">Month</button>
+                  <button class="seg" data-evview="week">Week</button>
+                  <button class="seg" data-evview="day">Day</button>
+                  <button class="seg" data-evview="agenda">Agenda</button>
+                </div>
+                <button class="ev-format-btn" id="evFormat" title="Switch 12/24-hour">24h</button>
+                <button class="btn-add ev-add-btn" id="evAddBtn">+ Event</button>
+              </div>
+              <div class="ev-body" id="evBody"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: HABITS                                                  -->
+        <!-- ============================================================ -->
+        <div id="view-habits" hidden>
+          <div class="page-top">
+            <div>
+              <h1>Habits</h1>
+              <p>Build streaks, one day at a time</p>
+            </div>
+            <button class="btn-add" id="habitAddBtn">+ Add Habit</button>
+          </div>
+          <div class="summary" id="habitSummary"></div>
+          <div class="filters" id="habitFilters">
+            <button class="f-btn active" data-f="all">All</button>
+            <button class="f-btn" data-f="daily">Daily</button>
+            <button class="f-btn" data-f="weekly">Weekly</button>
+          </div>
+          <div class="empty" id="habitEmpty">
+            <div class="empty-icon">✅</div>
+            <h2>No habits yet</h2>
+            <p>Add a habit and start building your streak.</p>
+            <button class="btn-add" id="habitEmptyAdd">+ Add Habit</button>
+          </div>
+          <div id="habitList" class="habit-list"></div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: WATER                                                   -->
+        <!-- ============================================================ -->
+        <div id="view-water" hidden>
+          <div class="page-top">
+            <div>
+              <h1>Water</h1>
+              <p>Stay hydrated all day</p>
+            </div>
+            <button class="ev-today-btn" id="waterSettingsBtn">⚙ Goal</button>
+          </div>
+          <div id="waterMount"></div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: WORKOUTS                                                -->
+        <!-- ============================================================ -->
+        <div id="view-workouts" hidden>
+          <div class="page-top">
+            <div>
+              <h1>Workouts</h1>
+              <p>Log your training sessions</p>
+            </div>
+            <button class="btn-add" id="workoutAddBtn">+ Add Workout</button>
+          </div>
+          <div class="summary" id="workoutSummary"></div>
+          <div class="filters" id="workoutFilters">
+            <button class="f-btn active" data-f="all">All</button>
+            <button class="f-btn" data-f="strength">Strength</button>
+            <button class="f-btn" data-f="cardio">Cardio</button>
+            <button class="f-btn" data-f="other">Other</button>
+          </div>
+          <div class="empty" id="workoutEmpty">
+            <div class="empty-icon">🏋️</div>
+            <h2>No workouts yet</h2>
+            <p>Log your first session to start tracking.</p>
+            <button class="btn-add" id="workoutEmptyAdd">+ Add Workout</button>
+          </div>
+          <div id="workoutList" class="item-list"></div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: SLEEP                                                   -->
+        <!-- ============================================================ -->
+        <div id="view-sleep" hidden>
+          <div class="page-top">
+            <div>
+              <h1>Sleep</h1>
+              <p>Track your rest and patterns</p>
+            </div>
+            <div class="page-top-right">
+              <button class="ev-today-btn" id="sleepGoalBtn">⚙ Goal</button>
+              <button class="btn-add" id="sleepAddBtn">+ Log Sleep</button>
+            </div>
+          </div>
+          <div class="summary" id="sleepSummary"></div>
+          <div id="sleepTrend"></div>
+          <div class="empty" id="sleepEmpty">
+            <div class="empty-icon">😴</div>
+            <h2>No sleep logged yet</h2>
+            <p>Log last night to start seeing your trends.</p>
+            <button class="btn-add" id="sleepEmptyAdd">+ Log Sleep</button>
+          </div>
+          <div id="sleepList" class="item-list"></div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: CALORIES                                                -->
+        <!-- ============================================================ -->
+        <div id="view-calories" hidden>
+          <div class="page-top">
+            <div>
+              <h1>Calories</h1>
+              <p id="calorieDayLabel">Today</p>
+            </div>
+            <div class="page-top-right">
+              <button class="ev-today-btn" id="calorieGoalBtn">⚙ Goal</button>
+              <button class="btn-add" id="calorieAddBtn">+ Add Food</button>
+            </div>
+          </div>
+          <div class="cal-daynav">
+            <button class="ev-nav-btn" id="calPrevDay" aria-label="Previous day">‹</button>
+            <button class="ev-today-btn" id="calTodayBtn">Today</button>
+            <button class="ev-nav-btn" id="calNextDay" aria-label="Next day">›</button>
+          </div>
+          <div id="calorieMount"></div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- VIEW: CUSTOM TRACKERS (schema-driven)                         -->
+        <!-- ============================================================ -->
+        <div id="view-custom" hidden>
+          <div id="customMount"></div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== Job Modal ===== -->
+  <div class="modal-wrap" id="modalWrap" role="dialog" aria-modal="true" aria-labelledby="jobModalTitle">
+    <div class="modal">
+      <div class="modal-top">
+        <h2 id="jobModalTitle">Add Application</h2>
+        <button class="modal-x" id="modalClose" aria-label="Close">✕</button>
+      </div>
+      <form id="jobForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="row-2">
+          <div class="field">
+            <label for="f-title">Job Title <span class="req">*</span></label>
+            <input id="f-title" name="title" type="text" placeholder="e.g. Frontend Developer" required />
+          </div>
+          <div class="field">
+            <label for="f-company">Company</label>
+            <input id="f-company" name="company" type="text" placeholder="e.g. Acme Corp" />
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label for="f-location">Location</label>
+            <input id="f-location" name="location" type="text" placeholder="e.g. Remote" />
+          </div>
+          <div class="field">
+            <label for="f-date">Date Applied</label>
+            <input id="f-date" name="date" type="date" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-url">Job Listing URL</label>
+          <input id="f-url" name="url" type="url" placeholder="https://..." />
+        </div>
+        <div class="field">
+          <label for="f-status">Status</label>
+          <select id="f-status" name="status">
+            <option value="pending">⏳ Pending</option>
+            <option value="no-reply">🔇 No Reply</option>
+            <option value="approved">✅ Approved</option>
+            <option value="denied">❌ Denied</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-notes">Notes</label>
+          <textarea id="f-notes" name="notes" rows="3"
+            placeholder="Contacts, follow-up dates, interview notes..."></textarea>
+        </div>
+        <div class="modal-btns">
+          <button type="button" id="cancelBtn">Cancel</button>
+          <button type="submit" class="submit">Save Application</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Transaction Modal ===== -->
+  <div class="modal-wrap" id="txnModalWrap" role="dialog" aria-modal="true" aria-labelledby="txnModalTitle">
+    <div class="modal">
+      <div class="modal-top">
+        <h2 id="txnModalTitle">Add Transaction</h2>
+        <button class="modal-x" id="txnModalClose" aria-label="Close">✕</button>
+      </div>
+
+      <div class="type-toggle" id="txnTypeToggle">
+        <button type="button" class="type-btn active" data-type="expense">💸 Expense</button>
+        <button type="button" class="type-btn" data-type="income">💰 Income</button>
+      </div>
+
+      <form id="txnForm" novalidate>
+        <input type="hidden" name="id" />
+        <input type="hidden" name="type" value="expense" />
+
+        <div class="row-3">
+          <div class="field">
+            <label for="tf-amount">Amount <span class="req">*</span></label>
+            <input id="tf-amount" name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required />
+          </div>
+          <div class="field field-cur">
+            <label for="tf-currency">Currency</label>
+            <select id="tf-currency" name="currency"></select>
+          </div>
+          <div class="field">
+            <label for="tf-date">Date</label>
+            <input id="tf-date" name="date" type="date" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="tf-desc">Description <span class="req">*</span></label>
+          <input id="tf-desc" name="description" type="text" placeholder="e.g. Jollibee lunch" required />
+        </div>
+
+        <div class="row-2">
+          <div class="field" id="tf-cat-wrap">
+            <label for="tf-cat">Category</label>
+            <select id="tf-cat" name="category"></select>
+          </div>
+          <div class="field">
+            <label for="tf-account">Payment Method</label>
+            <select id="tf-account" name="account"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="tf-tags">Tags <span class="hint">(comma separated)</span></label>
+          <input id="tf-tags" name="tags" type="text" placeholder="e.g. work, reimbursable" />
+        </div>
+
+        <div class="field">
+          <label for="tf-notes">Notes</label>
+          <textarea id="tf-notes" name="notes" rows="2" placeholder="Optional details..."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Receipt / Attachment</label>
+          <div class="receipt-row">
+            <label class="file-btn" for="tf-receipt">📎 Attach image</label>
+            <input id="tf-receipt" type="file" accept="image/*" hidden />
+            <div class="receipt-preview" id="receiptPreview" hidden>
+              <img id="receiptImg" alt="Receipt preview" />
+              <button type="button" class="receipt-remove" id="receiptRemove" aria-label="Remove">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-btns">
+          <button type="button" id="txnCancelBtn">Cancel</button>
+          <button type="submit" class="submit" id="txnSaveBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Goal Modal ===== -->
+  <div class="modal-wrap" id="goalModalWrap" role="dialog" aria-modal="true" aria-labelledby="goalModalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="goalModalTitle">New Savings Goal</h2>
+        <button class="modal-x" id="goalModalClose" aria-label="Close">✕</button>
+      </div>
+      <form id="goalForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="field">
+          <label for="gf-name">Goal Name <span class="req">*</span></label>
+          <input id="gf-name" name="name" type="text" placeholder="e.g. Emergency Fund" required />
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label for="gf-target">Target Amount <span class="req">*</span></label>
+            <input id="gf-target" name="target" type="number" min="1" step="0.01" placeholder="0.00" required />
+          </div>
+          <div class="field">
+            <label for="gf-saved">Already Saved</label>
+            <input id="gf-saved" name="saved" type="number" min="0" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label for="gf-deadline">Target Date</label>
+            <input id="gf-deadline" name="deadline" type="date" />
+          </div>
+          <div class="field">
+            <label for="gf-icon">Icon</label>
+            <input id="gf-icon" name="icon" type="text" maxlength="2" placeholder="🎯" />
+          </div>
+        </div>
+        <div class="modal-btns">
+          <button type="button" id="goalCancelBtn">Cancel</button>
+          <button type="submit" class="submit">Save Goal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Recurring Modal ===== -->
+  <div class="modal-wrap" id="recurModalWrap" role="dialog" aria-modal="true" aria-labelledby="recurModalTitle">
+    <div class="modal">
+      <div class="modal-top">
+        <h2 id="recurModalTitle">New Recurring</h2>
+        <button class="modal-x" id="recurModalClose" aria-label="Close">✕</button>
+      </div>
+
+      <div class="type-toggle" id="recurTypeToggle">
+        <button type="button" class="type-btn active" data-type="expense">💸 Expense</button>
+        <button type="button" class="type-btn" data-type="income">💰 Income</button>
+      </div>
+
+      <form id="recurForm" novalidate>
+        <input type="hidden" name="id" />
+        <input type="hidden" name="type" value="expense" />
+
+        <div class="row-2">
+          <div class="field">
+            <label for="rf-kind">Type</label>
+            <select id="rf-kind" name="kind">
+              <option value="bill">🧾 Bill</option>
+              <option value="subscription">🔁 Subscription</option>
+              <option value="salary">💼 Salary</option>
+              <option value="rent">🏠 Rent</option>
+              <option value="loan">🏦 Loan</option>
+              <option value="other">📦 Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="rf-freq">Frequency</label>
+            <select id="rf-freq" name="frequency">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly" selected>Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row-3">
+          <div class="field">
+            <label for="rf-amount">Amount <span class="req">*</span></label>
+            <input id="rf-amount" name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required />
+          </div>
+          <div class="field field-cur">
+            <label for="rf-currency">Currency</label>
+            <select id="rf-currency" name="currency"></select>
+          </div>
+          <div class="field">
+            <label for="rf-next">Next Date</label>
+            <input id="rf-next" name="nextDate" type="date" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="rf-desc">Description <span class="req">*</span></label>
+          <input id="rf-desc" name="description" type="text" placeholder="e.g. Netflix" required />
+        </div>
+
+        <div class="row-2">
+          <div class="field" id="rf-cat-wrap">
+            <label for="rf-cat">Category</label>
+            <select id="rf-cat" name="category"></select>
+          </div>
+          <div class="field">
+            <label for="rf-account">Payment Method</label>
+            <select id="rf-account" name="account"></select>
+          </div>
+        </div>
+
+        <div class="modal-btns">
+          <button type="button" id="recurCancelBtn">Cancel</button>
+          <button type="submit" class="submit">Save Recurring</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Category Modal ===== -->
+  <div class="modal-wrap" id="catModalWrap" role="dialog" aria-modal="true" aria-labelledby="catModalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="catModalTitle">New Category</h2>
+        <button class="modal-x" id="catModalClose" aria-label="Close">✕</button>
+      </div>
+      <form id="catForm" novalidate>
+        <input type="hidden" name="id" />
+        <input type="hidden" name="kind" value="expense" />
+        <div class="row-2">
+          <div class="field">
+            <label for="cf-name">Name <span class="req">*</span></label>
+            <input id="cf-name" name="label" type="text" placeholder="e.g. Pets" required />
+          </div>
+          <div class="field">
+            <label for="cf-icon">Icon</label>
+            <input id="cf-icon" name="icon" type="text" maxlength="2" placeholder="🐾" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Color</label>
+          <div class="swatch-row" id="catSwatches"></div>
+          <input type="hidden" name="color" id="cf-color" />
+        </div>
+        <div class="modal-btns">
+          <button type="button" id="catCancelBtn">Cancel</button>
+          <button type="submit" class="submit">Save Category</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Day Modal (calendar) ===== -->
+  <div class="modal-wrap" id="dayModalWrap" role="dialog" aria-modal="true" aria-labelledby="dayModalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="dayModalTitle">Day</h2>
+        <button class="modal-x" id="dayModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="day-summary" id="dayModalSummary"></div>
+      <ul class="item-list" id="dayModalList"></ul>
+      <div class="modal-btns">
+        <button type="button" class="submit" id="dayAddBtn">+ Add for this day</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Event Modal ===== -->
+  <div class="modal-wrap" id="evModalWrap" role="dialog" aria-modal="true" aria-labelledby="evModalTitle">
+    <div class="modal">
+      <div class="modal-top">
+        <h2 id="evModalTitle">New Event</h2>
+        <button class="modal-x" id="evModalClose" aria-label="Close">✕</button>
+      </div>
+      <form id="evForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="field">
+          <label for="evf-title">Title <span class="req">*</span></label>
+          <input id="evf-title" name="title" type="text" placeholder="Add title" required />
+        </div>
+        <label class="switch-row"><input type="checkbox" id="evf-allday" name="allDay" /> <span>All-day
+            event</span></label>
+        <div class="row-2">
+          <div class="field"><label for="evf-sdate">Start date</label><input id="evf-sdate" name="startDate"
+              type="date" /></div>
+          <div class="field ev-time-field"><label for="evf-stime">Start time</label><input id="evf-stime"
+              name="startTime" type="time" /></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label for="evf-edate">End date</label><input id="evf-edate" name="endDate" type="date" />
+          </div>
+          <div class="field ev-time-field"><label for="evf-etime">End time</label><input id="evf-etime" name="endTime"
+              type="time" /></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label for="evf-label">Label</label><select id="evf-label" name="label"></select></div>
+          <div class="field"><label for="evf-recur">Repeat</label>
+            <select id="evf-recur" name="recurrence">
+              <option value="none">Does not repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label for="evf-location">Location</label><input id="evf-location" name="location"
+            type="text" placeholder="Add location" /></div>
+        <div class="field"><label>Color</label>
+          <div class="swatch-row" id="evColorRow"></div><input type="hidden" name="color" id="evf-color" />
+        </div>
+        <div class="field">
+          <label>Reminders</label>
+          <div class="reminders" id="evReminders"></div>
+          <div class="add-reminder">
+            <select id="evReminderSel" class="ctrl-sel"></select>
+            <button type="button" class="mini-btn" id="evAddReminder">+ Add</button>
+          </div>
+        </div>
+        <div class="field"><label for="evf-desc">Description / Notes</label><textarea id="evf-desc" name="description"
+            rows="2" placeholder="Add notes"></textarea></div>
+        <div class="modal-btns">
+          <button type="button" id="evCancelBtn">Cancel</button>
+          <button type="submit" class="submit">Save Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Label Modal ===== -->
+  <div class="modal-wrap" id="evLabelModalWrap" role="dialog" aria-modal="true" aria-labelledby="evLabelModalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="evLabelModalTitle">New Label</h2>
+        <button class="modal-x" id="evLabelClose" aria-label="Close">✕</button>
+      </div>
+      <form id="evLabelForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="field"><label for="evlf-name">Name <span class="req">*</span></label><input id="evlf-name"
+            name="name" type="text" placeholder="e.g. Gym" required /></div>
+        <div class="field"><label>Color</label>
+          <div class="swatch-row" id="evLabelColors"></div><input type="hidden" name="color" id="evlf-color" />
+        </div>
+        <div class="modal-btns">
+          <button type="button" id="evLabelCancel">Cancel</button>
+          <button type="submit" class="submit">Save Label</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Habit Modal ===== -->
+  <div class="modal-wrap" id="habitModalWrap" role="dialog" aria-modal="true" aria-labelledby="habitModalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="habitModalTitle">New Habit</h2><button class="modal-x" id="habitModalClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="habitForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="row-2">
+          <div class="field"><label for="hf-name">Name <span class="req">*</span></label><input id="hf-name" name="name"
+              type="text" placeholder="e.g. Read 20 min" required /></div>
+          <div class="field"><label for="hf-icon">Icon</label><input id="hf-icon" name="icon" type="text" maxlength="2"
+              placeholder="📖" /></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label for="hf-freq">Frequency</label><select id="hf-freq" name="frequency">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly target</option>
+            </select></div>
+          <div class="field" id="hf-target-wrap"><label for="hf-target">Times / week</label><input id="hf-target"
+              name="target" type="number" min="1" max="7" value="3" /></div>
+        </div>
+        <div class="field"><label>Color</label>
+          <div class="swatch-row" id="habitColors"></div><input type="hidden" name="color" id="hf-color" />
+        </div>
+        <div class="modal-btns"><button type="button" id="habitCancelBtn">Cancel</button><button type="submit"
+            class="submit">Save Habit</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Water Settings Modal ===== -->
+  <div class="modal-wrap" id="waterSettingsWrap" role="dialog" aria-modal="true" aria-labelledby="waterSettingsTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="waterSettingsTitle">Water Goal</h2><button class="modal-x" id="waterSettingsClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="waterSettingsForm" novalidate>
+        <div class="row-2">
+          <div class="field"><label for="wsf-goal">Daily goal (glasses)</label><input id="wsf-goal" name="goal"
+              type="number" min="1" max="30" value="8" /></div>
+          <div class="field"><label for="wsf-ml">Glass size (ml)</label><input id="wsf-ml" name="glassMl" type="number"
+              min="50" step="10" value="250" /></div>
+        </div>
+        <div class="modal-btns"><button type="button" id="waterSettingsCancel">Cancel</button><button type="submit"
+            class="submit">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Workout Modal ===== -->
+  <div class="modal-wrap" id="workoutModalWrap" role="dialog" aria-modal="true" aria-labelledby="workoutModalTitle">
+    <div class="modal">
+      <div class="modal-top">
+        <h2 id="workoutModalTitle">New Workout</h2><button class="modal-x" id="workoutModalClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="workoutForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="row-2">
+          <div class="field"><label for="wf-name">Name <span class="req">*</span></label><input id="wf-name" name="name"
+              type="text" placeholder="e.g. Push Day" required /></div>
+          <div class="field"><label for="wf-date">Date</label><input id="wf-date" name="date" type="date" /></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label for="wf-type">Type</label><select id="wf-type" name="type">
+              <option value="strength">🏋️ Strength</option>
+              <option value="cardio">🏃 Cardio</option>
+              <option value="other">🤸 Other</option>
+            </select></div>
+          <div class="field"><label for="wf-duration">Duration (min)</label><input id="wf-duration" name="duration"
+              type="number" min="0" placeholder="45" /></div>
+        </div>
+        <div class="field">
+          <label>Exercises</label>
+          <div id="wf-exercises" class="ex-rows"></div>
+          <button type="button" class="mini-btn" id="wf-add-ex">+ Add exercise</button>
+        </div>
+        <div class="field"><label for="wf-notes">Notes</label><textarea id="wf-notes" name="notes" rows="2"
+            placeholder="How did it go?"></textarea></div>
+        <div class="modal-btns"><button type="button" id="workoutCancelBtn">Cancel</button><button type="submit"
+            class="submit">Save Workout</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Sleep Modal ===== -->
+  <div class="modal-wrap" id="sleepModalWrap" role="dialog" aria-modal="true" aria-labelledby="sleepModalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="sleepModalTitle">Log Sleep</h2><button class="modal-x" id="sleepModalClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="sleepForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="field"><label for="sf-date">Date (morning of)</label><input id="sf-date" name="date" type="date" />
+        </div>
+        <div class="row-2">
+          <div class="field"><label for="sf-bed">Bedtime</label><input id="sf-bed" name="bedtime" type="time"
+              value="23:00" /></div>
+          <div class="field"><label for="sf-wake">Wake time</label><input id="sf-wake" name="waketime" type="time"
+              value="07:00" /></div>
+        </div>
+        <div class="field"><label>Quality</label>
+          <div class="star-row" id="sf-stars"></div><input type="hidden" name="quality" id="sf-quality" value="3" />
+        </div>
+        <div class="field"><label for="sf-notes">Notes</label><textarea id="sf-notes" name="notes" rows="2"
+            placeholder="Dreams, disturbances..."></textarea></div>
+        <div class="modal-btns"><button type="button" id="sleepCancelBtn">Cancel</button><button type="submit"
+            class="submit">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Sleep Goal Modal ===== -->
+  <div class="modal-wrap" id="sleepGoalWrap" role="dialog" aria-modal="true" aria-labelledby="sleepGoalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="sleepGoalTitle">Sleep Goal</h2><button class="modal-x" id="sleepGoalClose" aria-label="Close">✕</button>
+      </div>
+      <form id="sleepGoalForm" novalidate>
+        <div class="field"><label for="sgf-goal">Target hours per night</label><input id="sgf-goal" name="goal"
+            type="number" min="1" max="14" step="0.5" value="8" /></div>
+        <div class="modal-btns"><button type="button" id="sleepGoalCancel">Cancel</button><button type="submit"
+            class="submit">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Calorie Modal ===== -->
+  <div class="modal-wrap" id="calorieModalWrap" role="dialog" aria-modal="true" aria-labelledby="calorieModalTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="calorieModalTitle">Add Food</h2><button class="modal-x" id="calorieModalClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="calorieForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="row-2">
+          <div class="field"><label for="caf-name">Food <span class="req">*</span></label><input id="caf-name"
+              name="name" type="text" placeholder="e.g. Chicken salad" required /></div>
+          <div class="field"><label for="caf-meal">Meal</label><select id="caf-meal" name="meal">
+              <option value="breakfast">🍳 Breakfast</option>
+              <option value="lunch">🥗 Lunch</option>
+              <option value="dinner">🍽️ Dinner</option>
+              <option value="snack">🍫 Snack</option>
+            </select></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label for="caf-cal">Calories <span class="req">*</span></label><input id="caf-cal"
+              name="calories" type="number" min="0" placeholder="0" required /></div>
+          <div class="field"><label for="caf-date">Date</label><input id="caf-date" name="date" type="date" /></div>
+        </div>
+        <div class="row-3">
+          <div class="field"><label for="caf-p">Protein (g)</label><input id="caf-p" name="protein" type="number"
+              min="0" step="0.1" placeholder="0" /></div>
+          <div class="field"><label for="caf-c">Carbs (g)</label><input id="caf-c" name="carbs" type="number" min="0"
+              step="0.1" placeholder="0" /></div>
+          <div class="field"><label for="caf-f">Fat (g)</label><input id="caf-f" name="fat" type="number" min="0"
+              step="0.1" placeholder="0" /></div>
+        </div>
+        <div class="modal-btns"><button type="button" id="calorieCancelBtn">Cancel</button><button type="submit"
+            class="submit">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Calorie Goal Modal ===== -->
+  <div class="modal-wrap" id="calorieSettingsWrap" role="dialog" aria-modal="true"
+    aria-labelledby="calorieSettingsTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="calorieSettingsTitle">Daily Goals</h2><button class="modal-x" id="calorieSettingsClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="calorieSettingsForm" novalidate>
+        <div class="field"><label for="csf-goal">Calorie goal (kcal)</label><input id="csf-goal" name="goal"
+            type="number" min="0" value="2000" /></div>
+        <div class="row-3">
+          <div class="field"><label for="csf-p">Protein (g)</label><input id="csf-p" name="pg" type="number" min="0"
+              placeholder="—" /></div>
+          <div class="field"><label for="csf-c">Carbs (g)</label><input id="csf-c" name="cg" type="number" min="0"
+              placeholder="—" /></div>
+          <div class="field"><label for="csf-f">Fat (g)</label><input id="csf-f" name="fg" type="number" min="0"
+              placeholder="—" /></div>
+        </div>
+        <div class="modal-btns"><button type="button" id="calorieSettingsCancel">Cancel</button><button type="submit"
+            class="submit">Save</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Custom Tracker Builder Modal ===== -->
+  <div class="modal-wrap" id="customBuilderWrap" role="dialog" aria-modal="true" aria-labelledby="customBuilderTitle">
+    <div class="modal">
+      <div class="modal-top">
+        <h2 id="customBuilderTitle">New Tracker</h2><button class="modal-x" id="customBuilderClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="customBuilderForm" novalidate>
+        <input type="hidden" name="id" />
+        <div class="row-3">
+          <div class="field"><label for="cbf-name">Name <span class="req">*</span></label><input id="cbf-name"
+              name="name" type="text" placeholder="e.g. Books Read" required /></div>
+          <div class="field"><label for="cbf-icon">Icon</label><input id="cbf-icon" name="icon" type="text"
+              maxlength="2" placeholder="📚" /></div>
+          <div class="field"><label>Color</label>
+            <div class="swatch-row" id="cbf-colors"></div><input type="hidden" name="color" id="cbf-color" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Fields <span class="hint">(title field is added automatically)</span></label>
+          <div id="cbf-fields" class="field-rows"></div>
+          <div class="add-field-row">
+            <select id="cbf-fieldtype" class="ctrl-sel">
+              <option value="text">Text</option>
+              <option value="number">Number</option>
+              <option value="date">Date</option>
+              <option value="select">Single-select</option>
+              <option value="checkbox">Checkbox</option>
+              <option value="notes">Notes</option>
+            </select>
+            <button type="button" class="mini-btn" id="cbf-add-field">+ Add field</button>
+          </div>
+        </div>
+        <div class="modal-btns"><button type="button" id="customBuilderCancel">Cancel</button><button type="submit"
+            class="submit">Save Tracker</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Custom Entry Modal (fields injected by JS) ===== -->
+  <div class="modal-wrap" id="customEntryWrap" role="dialog" aria-modal="true" aria-labelledby="customEntryTitle">
+    <div class="modal modal-sm">
+      <div class="modal-top">
+        <h2 id="customEntryTitle">Add Entry</h2><button class="modal-x" id="customEntryClose"
+          aria-label="Close">✕</button>
+      </div>
+      <form id="customEntryForm" novalidate>
+        <input type="hidden" name="id" />
+        <div id="customEntryFields"></div>
+        <div class="modal-btns"><button type="button" id="customEntryCancel">Cancel</button><button type="submit"
+            class="submit">Save Entry</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Event context menu ===== -->
+  <div class="ev-ctx" id="evCtx" hidden>
+    <button data-a="edit">✏️ Edit</button>
+    <button data-a="dup">⧉ Duplicate</button>
+    <button data-a="del">🗑️ Delete</button>
+  </div>
+
+  <!-- ===== Toast ===== -->
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <!-- core.js + auth.js MUST load first: core creates window.TT (helpers + async
+     data layer); auth resolves the session and sets TT.userId before any
+     tracker module reads its per-user data. -->
+  <script src="env.js"></script>
+  <script src="core.js"></script>
+  <script src="auth.js"></script>
+  <script src="script.js"></script>
+  <script src="expenses.js"></script>
+  <script src="events.js"></script>
+  <script src="habits.js"></script>
+  <script src="water.js"></script>
+  <script src="workouts.js"></script>
+  <script src="sleep.js"></script>
+  <script src="calories.js"></script>
+  <script src="custom.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+
+</html>

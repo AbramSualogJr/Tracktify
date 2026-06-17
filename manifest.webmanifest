@@ -1,0 +1,14 @@
+{
+  "name": "Tracktify",
+  "short_name": "Tracktify",
+  "description": "All-in-one personal tracker — jobs, expenses, events, habits, and more.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f6f8",
+  "theme_color": "#7c3aed",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

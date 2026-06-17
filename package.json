@@ -1,0 +1,13 @@
+{
+  "name": "tracktify",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tracktify — all-in-one personal tracker. Dependency-free client + Node backend.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

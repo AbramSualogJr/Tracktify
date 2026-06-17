@@ -1,0 +1,6 @@
+# Tracktify backend
+tracktify-data.json       # per-user data store (created at runtime)
+tracktify-data.json.tmp
+.env                      # secrets: TT_JWT_SECRET, ANTHROPIC_API_KEY
+node_modules/
+*.log

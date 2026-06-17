@@ -1,0 +1,19 @@
+# Render Blueprint — deploy Tracktify as one web service.
+# In Render: New + → Blueprint → connect this repo → Apply.
+services:
+  - type: web
+    name: tracktify
+    runtime: node
+    plan: free                 # free tier has an EPHEMERAL disk (see DEPLOY.md to add a persistent one)
+    buildCommand: npm install  # no dependencies — this is effectively a no-op
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: TT_JWT_SECRET     # session signing secret — Render generates a strong value
+        generateValue: true
+      - key: ANTHROPIC_API_KEY # optional: enables the dashboard AI summary. Set in the dashboard, not here.
+        sync: false
+      # For a PERSISTENT data store on a paid instance, add a disk (see DEPLOY.md)
+      # and uncomment:
+      # - key: TT_DATA_FILE
+      #   value: /data/tracktify-data.json

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed gradient so it works as a maskable icon (OS applies the shape). -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#g)" />
+  <!-- trend-up check mark, kept inside the maskable safe zone -->
+  <path d="M150 286l64 64 150-168" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M332 158h54v54" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
