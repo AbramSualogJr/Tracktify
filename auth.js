@@ -57,11 +57,16 @@
     applySession(session);            // modules will now read this user's namespace
     // Self-heal stale caches: in cloud mode, re-pull the server's copy on each fresh
     // load. The modules read the (possibly stale) cache synchronously below, so if the
-    // pull changes anything we reload ONCE (guarded per session) to re-read fresh data.
-    // This also makes cross-device edits show up on the next app open.
-    if (TT.MODE === 'http' && !sessionStorage.getItem('tt:synced')) {
-      sessionStorage.setItem('tt:synced', '1');
-      TT.db.bootstrap().then(function (changed) { if (changed) location.reload(); });
+    // pull actually changed anything we reload to re-read fresh data. We ALWAYS run the
+    // pull (so a cold-start failure simply retries on the next load) and guard only the
+    // RELOAD against an infinite loop. Also makes cross-device edits appear on next open.
+    if (TT.MODE === 'http') {
+      TT.db.bootstrap().then(function (changed) {
+        if (changed && !sessionStorage.getItem('tt:healed')) {
+          sessionStorage.setItem('tt:healed', '1');
+          location.reload();
+        }
+      });
     }
     document.addEventListener('DOMContentLoaded', mountUserChip);
     if (document.readyState !== 'loading') mountUserChip();
