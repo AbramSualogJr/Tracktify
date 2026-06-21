@@ -13,7 +13,16 @@ services:
         generateValue: true
       - key: ANTHROPIC_API_KEY # optional: enables the dashboard AI summary. Set in the dashboard, not here.
         sync: false
-      # For a PERSISTENT data store on a paid instance, add a disk (see DEPLOY.md)
-      # and uncomment:
+      # DURABLE STORAGE (required for cross-device sync on the free plan).
+      # The free disk is ephemeral and wipes all accounts/data on restart/redeploy.
+      # Create a free Upstash Redis DB and paste its REST URL + token here, in the
+      # Render dashboard → Environment (see DEPLOY.md §4). With these set, data
+      # persists across restarts and syncs across every device.
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      # Alternative (paid): a persistent disk instead of Redis — upgrade the plan,
+      # mount a disk at /data, and uncomment:
       # - key: TT_DATA_FILE
       #   value: /data/tracktify-data.json

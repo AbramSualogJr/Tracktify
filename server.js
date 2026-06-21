@@ -32,23 +32,86 @@ const JWT_SECRET = process.env.TT_JWT_SECRET || 'dev-insecure-secret-change-me';
 const DATA_FILE = process.env.TT_DATA_FILE || path.join(ROOT, 'tracktify-data.json');
 if (JWT_SECRET === 'dev-insecure-secret-change-me') console.warn('⚠  TT_JWT_SECRET not set — using an insecure dev secret. Set it in production.');
 
+// Durable store selector. On Render's FREE plan the local disk is EPHEMERAL — it
+// resets on every cold start (instances sleep after ~15 min idle) and redeploy,
+// which silently wipes all accounts/data. If Upstash Redis REST creds are present
+// we persist there instead (survives restarts, free tier, no extra dependency);
+// otherwise we fall back to the local JSON file, which is perfect for local dev.
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || '';
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+const USE_REDIS = !!(UPSTASH_URL && UPSTASH_TOKEN);
+const REDIS_KEY = process.env.TT_REDIS_KEY || 'tracktify:db';
+if (!USE_REDIS && process.env.RENDER) console.warn('⚠  No UPSTASH_REDIS_REST_URL/TOKEN set — data is on the EPHEMERAL Render disk and WILL be lost on restart/redeploy. See DEPLOY.md.');
+
 const TYPES = {
   '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml',
   '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json'
 };
 
-/* ---------------- Store (in-memory + debounced atomic write) ---------------- */
+/* ---------------- Store (in-memory + durable, debounced persistence) ---------
+   The in-memory `db` is the working copy; mutations call persist(), debounced so
+   a burst of writes coalesces into one durable write. USE_REDIS upserts the whole
+   blob to Upstash; otherwise we do an atomic write to the local JSON file. */
 let db = { users: {}, data: {} };               // users: email -> {id,name,email,salt,hash}
-try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* first run */ }
-let writeTimer = null;
-function persist() {
-  clearTimeout(writeTimer);
-  writeTimer = setTimeout(function () {
-    const tmp = DATA_FILE + '.tmp';
-    fs.writeFile(tmp, JSON.stringify(db), function (err) { if (!err) fs.rename(tmp, DATA_FILE, function () {}); });
-  }, 150);
+
+// Minimal dependency-free Upstash Redis REST client: POST a [cmd, ...args] array,
+// get back { result } (or { error }). Uses Node's built-in https — no packages.
+function redis(cmd) {
+  return new Promise(function (resolve, reject) {
+    const payload = JSON.stringify(cmd);
+    const u = new URL(UPSTASH_URL);
+    const r = https.request({
+      hostname: u.hostname, port: u.port || 443, path: '/', method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + UPSTASH_TOKEN,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    }, function (resp) {
+      let data = '';
+      resp.on('data', function (c) { data += c; });
+      resp.on('end', function () {
+        try { const j = JSON.parse(data); return j.error ? reject(new Error(j.error)) : resolve(j); }
+        catch (e) { reject(e); }
+      });
+    });
+    r.on('error', reject);
+    r.write(payload); r.end();
+  });
 }
+
+// Hydrate the persisted db into memory at boot. Returns a promise so we only
+// start serving once the data is in hand (never race the first request).
+function loadDb() {
+  if (USE_REDIS) {
+    return redis(['GET', REDIS_KEY])
+      .then(function (r) { if (r && r.result) { try { db = JSON.parse(r.result); } catch (e) {} } })
+      .catch(function (e) { console.error('⚠  Could not load from Redis — starting empty:', e.message); });
+  }
+  try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* first run */ }
+  return Promise.resolve();
+}
+
+let writeTimer = null, dirty = false;
+function persist() { dirty = true; clearTimeout(writeTimer); writeTimer = setTimeout(writeNow, 150); }
+function writeNow() {
+  if (!dirty) return Promise.resolve();
+  dirty = false;
+  const snapshot = JSON.stringify(db);
+  if (USE_REDIS) {
+    return redis(['SET', REDIS_KEY, snapshot]).catch(function (e) { dirty = true; console.error('⚠  Redis persist failed:', e.message); });
+  }
+  return new Promise(function (resolve) {
+    const tmp = DATA_FILE + '.tmp';
+    fs.writeFile(tmp, snapshot, function (err) { if (!err) fs.rename(tmp, DATA_FILE, function () { resolve(); }); else { dirty = true; resolve(); } });
+  });
+}
+// Best-effort flush on shutdown so a write in the last debounce window isn't lost
+// when Render stops/sleeps the instance (it sends SIGTERM first).
+['SIGTERM', 'SIGINT'].forEach(function (sig) {
+  process.on(sig, function () { clearTimeout(writeTimer); Promise.resolve(writeNow()).then(function () { process.exit(0); }); });
+});
 
 /* ---------------- Crypto: passwords (scrypt) + JWT (HMAC-SHA256) ------------- */
 function hashPw(pw, salt) {
@@ -227,6 +290,12 @@ const server = http.createServer(function (req, res) {
   });
 });
 
-server.listen(PORT, function () {
-  console.log('Tracktify live on http://localhost:' + PORT + (process.env.ANTHROPIC_API_KEY ? ' (AI on)' : ' (AI off)'));
+// Load persisted data first, THEN start serving (so the first request can never
+// race an empty in-memory db before Redis has answered).
+loadDb().then(function () {
+  server.listen(PORT, function () {
+    console.log('Tracktify live on http://localhost:' + PORT
+      + (USE_REDIS ? ' (store: Redis ✓ durable)' : ' (store: local file)')
+      + (process.env.ANTHROPIC_API_KEY ? ' (AI on)' : ' (AI off)'));
+  });
 });
