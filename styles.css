@@ -26,7 +26,7 @@
   --surface-2:#1e1d2a;
   --text:     #eeeef8;
   --soft:     #9898b0;
-  --muted:    #55555f;
+  --muted:    #7c7c8c;
   --line:     #252530;
   --sidebar:  #111119;
   --sb-line:  #202028;
@@ -45,7 +45,7 @@ body {
   overflow: hidden;
   transition: background .25s, color .25s;
 }
-button { font-family: inherit; cursor: pointer; border: none; background: none; }
+button { font-family: inherit; color: inherit; cursor: pointer; border: none; background: none; }
 input, select, textarea { font-family: inherit; font-size: 13px; }
 ul { list-style: none; }
 [hidden] { display: none !important; }
@@ -55,6 +55,7 @@ ul { list-style: none; }
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
   height: 100vh;
+  height: 100dvh; /* dynamic viewport: avoids content hiding behind iOS Safari toolbars/notch */
 }
 
 /* ── Sidebar ── */
@@ -1234,7 +1235,7 @@ html { -webkit-text-size-adjust: 100%; }
 /* per-tracker stat cards */
 .dash-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 22px; }
 .dash-card {
-  text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  text-align: left; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
   padding: 16px; transition: box-shadow .15s, border-color .15s, transform .1s;
 }
 .dash-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-1px); }
