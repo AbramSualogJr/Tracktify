@@ -221,6 +221,14 @@ const server = http.createServer(function (req, res) {
   // env shim — anything served by THIS server runs in cloud (http) mode.
   if (urlPath === '/env.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.TT_MODE="http";'); }
   if (urlPath === '/api/health') return json(res, 200, { ok: true });
+  // TEMP diagnostic (remove after debugging) — reports the SERVER'S in-memory state.
+  if (urlPath === '/api/debug/state') {
+    if ((req.url.split('?')[1] || '').indexOf('k=tt-peek-7731') === -1) return json(res, 403, { error: 'forbidden' });
+    var dbg = { users: {}, expenseCounts: {} };
+    Object.keys(db.users).forEach(function (e) { dbg.users[e] = db.users[e].id; });
+    Object.keys(db.data).forEach(function (u) { dbg.expenseCounts[u] = ((db.data[u] || {}).expenses || []).length; });
+    return json(res, 200, dbg);
+  }
 
   if (urlPath.indexOf('/api/') === 0) {
     const parts = urlPath.split('/').filter(Boolean); // ['api', ...]
