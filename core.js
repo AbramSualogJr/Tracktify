@@ -163,12 +163,19 @@
     // Pull the user's cloud data into the cache so the sync modules can read
     // it. Called by auth.js right after login, before the dashboard renders.
     bootstrap: function () {
-      if (TT.MODE !== 'http') return Promise.resolve(); // local: cache already is the store
+      if (TT.MODE !== 'http') return Promise.resolve(false); // local: cache already is the store
+      var changed = false;
       return Promise.all(RESOURCE_KEYS.map(function (key) {
         return TT.api.request('/' + resourcePath(key))
-          .then(function (data) { if (data != null) cacheSet(key, data); })
+          .then(function (data) {
+            if (data == null) return;
+            // Overwrite the local cache with the server's copy (server is the source
+            // of truth in cloud mode). Track whether it actually differed so the
+            // caller can reload to surface fresh data / heal a stale cache.
+            if (localStorage.getItem(physKey(key)) !== JSON.stringify(data)) { cacheSet(key, data); changed = true; }
+          })
           .catch(function () { /* missing resource = empty; ignore */ });
-      }));
+      })).then(function () { return changed; });
     },
     // One-time: lift the old single-user `tracktify-*` data into the first
     // account's namespace so existing users don't lose anything.
