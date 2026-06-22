@@ -113,11 +113,25 @@
   // Guarded by a per-user flag (lives in settings) so it runs exactly once.
   function migrateMoney() {
     if (settings._moneyMinor) return;
-    txns.forEach(function (t) { t.amount = Math.round((Number(t.amount) || 0) * 100); });
-    recurring.forEach(function (r) { r.amount = Math.round((Number(r.amount) || 0) * 100); });
-    if (budgets.monthly) budgets.monthly = Math.round(budgets.monthly * 100);
-    Object.keys(budgets.categories || {}).forEach(function (k) { budgets.categories[k] = Math.round(budgets.categories[k] * 100); });
-    goals.forEach(function (g) { g.target = Math.round((Number(g.target) || 0) * 100); g.saved = Math.round((Number(g.saved) || 0) * 100); });
+    // Safety net: the done-flag lives in `settings`, which can be reset or lost
+    // independently of the data (e.g. an account migration). Without this guard a
+    // lost flag would re-multiply ALREADY-minor amounts by 100 and corrupt every
+    // value. Minor-unit amounts are always integers; the legacy float data this
+    // targets has decimals. So if everything is already integral, treat it as
+    // already migrated and only (re)set the flag — never multiply.
+    var nums = txns.map(function (t) { return t.amount; })
+      .concat(recurring.map(function (r) { return r.amount; }))
+      .concat(goals.map(function (g) { return g.target; }), goals.map(function (g) { return g.saved; }))
+      .concat([budgets.monthly || 0])
+      .concat(Object.keys(budgets.categories || {}).map(function (k) { return budgets.categories[k]; }));
+    var alreadyMinor = nums.every(function (n) { return Number.isInteger(Number(n)); });
+    if (!alreadyMinor) {
+      txns.forEach(function (t) { t.amount = Math.round((Number(t.amount) || 0) * 100); });
+      recurring.forEach(function (r) { r.amount = Math.round((Number(r.amount) || 0) * 100); });
+      if (budgets.monthly) budgets.monthly = Math.round(budgets.monthly * 100);
+      Object.keys(budgets.categories || {}).forEach(function (k) { budgets.categories[k] = Math.round(budgets.categories[k] * 100); });
+      goals.forEach(function (g) { g.target = Math.round((Number(g.target) || 0) * 100); g.saved = Math.round((Number(g.saved) || 0) * 100); });
+    }
     settings._moneyMinor = true;
     saveTxns(); saveRecurring(); saveBudgets(); saveGoals(); saveSettings();
   }
