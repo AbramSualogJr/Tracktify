@@ -221,21 +221,6 @@ const server = http.createServer(function (req, res) {
   // env shim — anything served by THIS server runs in cloud (http) mode.
   if (urlPath === '/env.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.TT_MODE="http";'); }
   if (urlPath === '/api/health') return json(res, 200, { ok: true });
-  // TEMP one-shot data repair (remove after use) — sets a user's expenses + currency
-  // THROUGH the server so in-memory and Redis stay consistent. Idempotent; secret-guarded.
-  if (urlPath === '/api/admin/restore' && req.method === 'POST') {
-    if ((req.url.split('?')[1] || '').indexOf('k=tt-fix-9931') === -1) return json(res, 403, { error: 'forbidden' });
-    return readBody(req).then(function (b) {
-      if (!b.uid || !Array.isArray(b.expenses)) return json(res, 400, { error: 'bad body' });
-      db.data[b.uid] = db.data[b.uid] || {};
-      db.data[b.uid].expenses = b.expenses;
-      var s = db.data[b.uid]['exp-settings'] || {};
-      s.primary = b.primary || 'PHP'; s._moneyMinor = true;
-      db.data[b.uid]['exp-settings'] = s;
-      persist();
-      return json(res, 200, { ok: true, count: b.expenses.length, primary: s.primary, salaryAmount: (b.expenses[0] || {}).amount });
-    });
-  }
 
   if (urlPath.indexOf('/api/') === 0) {
     const parts = urlPath.split('/').filter(Boolean); // ['api', ...]
