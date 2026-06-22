@@ -45,7 +45,7 @@
   var viewTitle = document.getElementById('viewTitle');
   var TITLES = {
     dashboard: 'Dashboard',
-    jobs: 'Job Applications', expenses: 'Expenses', events: 'Events',
+    jobs: 'Job Applications', expenses: 'Finance', events: 'Events',
     habits: 'Habits', water: 'Water', workouts: 'Workouts', sleep: 'Sleep', calories: 'Calories'
   };
 

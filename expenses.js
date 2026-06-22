@@ -1632,7 +1632,7 @@
     var recent = txns.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 5)
       .map(function (x) { return { title: x.description, ts: x.createdAt || 0, meta: (x.type === 'income' ? '+' : '−') + money(x.amount, x.currency) }; });
     return {
-      name: 'Expenses', icon: '💸', view: 'expenses', stats: stats, recent: recent, upcoming: upcoming,
+      name: 'Finance', icon: '💸', view: 'expenses', stats: stats, recent: recent, upcoming: upcoming,
       headline: t.expense ? moneyP(t.expense) + ' spent this month' + (hasBudget ? (over ? ', over budget!' : ', ' + moneyP(left) + ' left') : '') : ''
     };
   });

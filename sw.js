@@ -7,11 +7,11 @@
      dynamic). The app's own data lives in localStorage via core.js.
    Bump CACHE on a breaking change to evict old assets.
    ============================================================ */
-const CACHE = 'tracktify-v2';
+const CACHE = 'tracktify-v3';
 const SHELL = [
   '/', 'index.html', 'env.js', 'core.js', 'auth.js', 'script.js',
   'expenses.js', 'events.js', 'habits.js', 'water.js', 'workouts.js',
-  'sleep.js', 'calories.js', 'custom.js', 'dashboard.js',
+  'sleep.js', 'calories.js', 'custom.js', 'extras.js', 'dashboard.js',
   'styles.css', 'favicon.svg', 'icon.svg', 'manifest.webmanifest'
 ];
 

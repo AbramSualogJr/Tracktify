@@ -5,7 +5,8 @@
       "name": "tracktify",
       "runtimeExecutable": "node",
       "runtimeArgs": [".claude/preview-server.js"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }

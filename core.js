@@ -81,7 +81,10 @@
     'tracktify-workouts',
     'tracktify-sleep', 'tracktify-sleep-settings',
     'tracktify-calories', 'tracktify-calories-settings',
-    'tracktify-custom-defs', 'tracktify-custom-data'
+    'tracktify-mood', 'tracktify-weight', 'tracktify-reading',
+    'tracktify-meds', 'tracktify-travel', 'tracktify-mindful', 'tracktify-screen',
+    'tracktify-custom-defs', 'tracktify-custom-data',
+    'tracktify-navorder', 'tracktify-navsort', 'tracktify-navfavs'
   ];
   TT.RESOURCE_KEYS = RESOURCE_KEYS;
 
