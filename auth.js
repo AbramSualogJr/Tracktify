@@ -68,6 +68,13 @@
         }
       });
     }
+    // Show the one-time recovery code captured during sign-up (after the reload).
+    var pendingCode = null; try { pendingCode = sessionStorage.getItem('tt:show-recovery'); } catch (e) {}
+    if (pendingCode) {
+      try { sessionStorage.removeItem('tt:show-recovery'); } catch (e) {}
+      var showIt = function () { showRecoveryModal(pendingCode); };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showIt); else showIt();
+    }
     document.addEventListener('DOMContentLoaded', mountUserChip);
     if (document.readyState !== 'loading') mountUserChip();
   } else {
@@ -98,7 +105,10 @@
     if (TT.MODE === 'http') {
       // Real server hashes the password (scrypt) and signs the JWT — never here.
       return TT.api.request('/auth/register', { method: 'POST', body: { name: name, email: email, password: password } })
-        .then(function (r) { return finishLogin(r.user, r.token); }).catch(httpAuthError);
+        .then(function (r) {
+          if (r.recoveryCode) { try { sessionStorage.setItem('tt:show-recovery', r.recoveryCode); } catch (e) {} }
+          return finishLogin(r.user, r.token);
+        }).catch(httpAuthError);
     }
     var users = getUsers();
     if (users.some(function (u) { return u.email === email; })) return Promise.reject(new Error('That email is already registered.'));
@@ -137,7 +147,44 @@
     TT.userId = null;
     location.reload();
   }
-  TT.auth = { logout: doLogout, register: register, login: login, currentUser: function () { return readSession(); } };
+  /* ---------- Account recovery (cloud mode) ---------- */
+  function recoveryStatus() {
+    if (TT.MODE !== 'http') return Promise.resolve(false);
+    return TT.api.request('/auth/recovery').then(function (r) { return !!(r && r.has); }).catch(function () { return false; });
+  }
+  function generateRecovery() {
+    if (TT.MODE !== 'http') return Promise.reject(new Error('Recovery is only available with a cloud account.'));
+    return TT.api.request('/auth/recovery', { method: 'POST' }).then(function (r) { if (!r || !r.code) throw new Error('No code returned'); return r.code; });
+  }
+  function resetWithCode(email, code, password) {
+    return TT.api.request('/auth/reset', { method: 'POST', body: { email: email, code: code, password: password } })
+      .then(function (r) { return finishLogin(r.user, r.token); })
+      .catch(function (err) {
+        var m = String((err && err.message) || '');
+        if (m.indexOf('401') > -1) throw new Error('Invalid email or recovery code.');
+        throw new Error('Could not reset password. Please try again.');
+      });
+  }
+
+  // One-time recovery-code reveal (used after sign-up and from Settings).
+  function showRecoveryModal(code) {
+    var w = document.createElement('div');
+    w.className = 'modal-wrap open';
+    w.innerHTML =
+      '<div class="modal modal-sm"><div class="modal-top"><h2>Save your recovery code</h2></div>' +
+      '<p class="set-note">This code lets you reset your password if you ever forget it. It’s shown only once — store it somewhere safe.</p>' +
+      '<div class="recovery-code">' + TT.esc(code) + '</div>' +
+      '<div class="modal-btns"><button type="button" class="ev-today-btn" id="arcCopy">Copy</button><button type="button" class="submit" id="arcDone">I’ve saved it</button></div></div>';
+    document.body.appendChild(w);
+    w.querySelector('#arcCopy').addEventListener('click', function () { try { navigator.clipboard.writeText(code); TT.toast('Copied', 'success'); } catch (e) {} });
+    w.querySelector('#arcDone').addEventListener('click', function () { w.remove(); });
+  }
+  TT.auth = {
+    logout: doLogout, register: register, login: login,
+    currentUser: function () { return readSession(); },
+    recoveryStatus: recoveryStatus, generateRecovery: generateRecovery, resetWithCode: resetWithCode,
+    showRecoveryModal: showRecoveryModal
+  };
 
   /* ============================================================
      AUTH SCREEN UI (injected; no index.html markup needed)
@@ -156,32 +203,41 @@
         '<form id="authForm" novalidate>' +
           '<div class="field" id="authNameField" hidden><label for="auth-name">Name</label><input id="auth-name" type="text" autocomplete="name" placeholder="Your name" /></div>' +
           '<div class="field"><label for="auth-email">Email</label><input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" required /></div>' +
-          '<div class="field"><label for="auth-pass">Password</label><input id="auth-pass" type="password" autocomplete="current-password" placeholder="••••••••" required /></div>' +
+          '<div class="field" id="authCodeField" hidden><label for="auth-code">Recovery code</label><input id="auth-code" type="text" autocomplete="off" placeholder="ABCD-EFGH-JKMN-PQRS" /></div>' +
+          '<div class="field"><label for="auth-pass" id="authPassLabel">Password</label><input id="auth-pass" type="password" autocomplete="current-password" placeholder="••••••••" required /></div>' +
           '<p class="auth-error" id="authError" role="alert"></p>' +
           '<button type="submit" class="btn-add auth-submit" id="authSubmit">Log In</button>' +
         '</form>' +
-        '<p class="auth-switch">' +
+        '<p class="auth-switch" id="authSwitchRow">' +
           '<span id="authSwitchText">New here?</span> ' +
           '<button type="button" id="authToggle" class="auth-link">Create an account</button>' +
         '</p>' +
+        '<p class="auth-switch"><button type="button" id="authForgot" class="auth-link">Forgot password?</button></p>' +
       '</div>';
     document.body.appendChild(el);
 
     var mode = 'login';
     var form = el.querySelector('#authForm');
     var err = el.querySelector('#authError');
-    el.querySelector('#authToggle').addEventListener('click', function () {
-      mode = mode === 'login' ? 'register' : 'login';
-      var reg = mode === 'register';
-      el.querySelector('#authTitle').textContent = reg ? 'Create your account' : 'Welcome back';
-      el.querySelector('#authSub').textContent = reg ? 'Start tracking in seconds.' : 'Log in to your trackers.';
+    function setMode(m) {
+      mode = m;
+      var reg = m === 'register', rst = m === 'reset';
+      el.querySelector('#authTitle').textContent = reg ? 'Create your account' : rst ? 'Reset password' : 'Welcome back';
+      el.querySelector('#authSub').textContent = reg ? 'Start tracking in seconds.' : rst ? 'Enter your email, recovery code, and a new password.' : 'Log in to your trackers.';
       el.querySelector('#authNameField').hidden = !reg;
       el.querySelector('#auth-name').required = reg;
-      el.querySelector('#authSubmit').textContent = reg ? 'Create Account' : 'Log In';
+      el.querySelector('#authCodeField').hidden = !rst;
+      el.querySelector('#authPassLabel').textContent = rst ? 'New password' : 'Password';
+      el.querySelector('#auth-pass').setAttribute('autocomplete', (reg || rst) ? 'new-password' : 'current-password');
+      el.querySelector('#authSubmit').textContent = reg ? 'Create Account' : rst ? 'Reset Password' : 'Log In';
       el.querySelector('#authSwitchText').textContent = reg ? 'Already have an account?' : 'New here?';
       el.querySelector('#authToggle').textContent = reg ? 'Log in' : 'Create an account';
+      el.querySelector('#authSwitchRow').style.display = rst ? 'none' : '';
+      el.querySelector('#authForgot').textContent = rst ? '← Back to log in' : 'Forgot password?';
       err.textContent = '';
-    });
+    }
+    el.querySelector('#authToggle').addEventListener('click', function () { setMode(mode === 'login' ? 'register' : 'login'); });
+    el.querySelector('#authForgot').addEventListener('click', function () { setMode(mode === 'reset' ? 'login' : 'reset'); });
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -189,10 +245,12 @@
       var email = el.querySelector('#auth-email').value.trim();
       var pass = el.querySelector('#auth-pass').value;
       var name = el.querySelector('#auth-name').value.trim();
-      if (!email || !pass || (mode === 'register' && !name)) { err.textContent = 'Please fill in all fields.'; return; }
-      var btn = el.querySelector('#authSubmit'); btn.disabled = true; btn.textContent = 'Please wait…';
-      var p = mode === 'register' ? register(name, email, pass) : login(email, pass);
-      p.catch(function (ex) { err.textContent = ex.message || 'Something went wrong.'; btn.disabled = false; btn.textContent = mode === 'register' ? 'Create Account' : 'Log In'; });
+      var code = el.querySelector('#auth-code').value.trim();
+      if (!email || !pass || (mode === 'register' && !name) || (mode === 'reset' && !code)) { err.textContent = 'Please fill in all fields.'; return; }
+      var btn = el.querySelector('#authSubmit'), orig = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Please wait…';
+      var p = mode === 'register' ? register(name, email, pass) : mode === 'reset' ? resetWithCode(email, code, pass) : login(email, pass);
+      p.catch(function (ex) { err.textContent = ex.message || 'Something went wrong.'; btn.disabled = false; btn.textContent = orig; });
     });
     setTimeout(function () { el.querySelector('#auth-email').focus(); }, 60);
   }

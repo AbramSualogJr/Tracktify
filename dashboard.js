@@ -135,8 +135,35 @@
     dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
     currentSnaps = buildSnapshots();
+    renderOnboard(!hasAnyData(currentSnaps));
     renderCards(currentSnaps);
     renderFeeds(currentSnaps);
+  }
+
+  // First-run: if nothing has been logged anywhere, show a friendly guide.
+  function hasAnyData(snaps) {
+    return snaps.some(function (s) {
+      return (s.recent && s.recent.length) || (s.upcoming && s.upcoming.length) ||
+        (s.stats && s.stats.some(function (st) { return st.value && st.value !== 0 && st.value !== '0'; }));
+    });
+  }
+  var onboardEl = null;
+  function renderOnboard(show) {
+    if (show && !onboardEl) {
+      onboardEl = document.createElement('section');
+      onboardEl.className = 'onboard-card';
+      onboardEl.innerHTML =
+        '<h2 class="onboard-title">👋 Welcome to Tracktify</h2>' +
+        '<p class="onboard-sub">Track anything — money, habits, health, and more. Here’s how to start:</p>' +
+        '<ol class="onboard-steps">' +
+          '<li><b>Pick a tracker</b> from the sidebar (or tap ☰ on mobile).</li>' +
+          '<li>Hit <b>+ Add</b> to log your first entry.</li>' +
+          '<li>Come back here — your dashboard fills in automatically.</li>' +
+        '</ol>' +
+        '<p class="onboard-tip">💾 Tip: open <b>Settings</b> (bottom-left) to set up reminders and download a backup of your data.</p>';
+      cardsEl.parentNode.insertBefore(onboardEl, cardsEl);
+    }
+    if (onboardEl) onboardEl.style.display = show ? '' : 'none';
   }
 
   function renderCards(snaps) {

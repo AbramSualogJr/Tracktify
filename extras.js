@@ -133,6 +133,36 @@
   TRACKERS.forEach(function (t) { byId[t.id] = t; });
   var searchMap = {};
 
+  // Trend-chart config for the time-series trackers: how to pull a number from
+  // each entry. Mood maps its emoji scale to a 1–5 score.
+  var MOODSCORE = { '😄 Great': 5, '🙂 Good': 4, '😐 Okay': 3, '😟 Low': 2, '😢 Bad': 1 };
+  var CHARTS = {
+    weight: { label: 'Weight trend', value: function (e) { return parseFloat(e.weight); } },
+    screen: { label: 'Screen time (hours)', value: function (e) { return parseFloat(e.hours); } },
+    mindful: { label: 'Minutes meditated', value: function (e) { return parseFloat(e.minutes); } },
+    mood: { label: 'Mood trend (1–5)', value: function (e) { return MOODSCORE[e.mood]; } }
+  };
+  TRACKERS.forEach(function (t) { if (CHARTS[t.id]) t.chart = CHARTS[t.id]; });
+
+  // Richer dashboard cards: Entries + This week + the tracker's own headline stat.
+  TRACKERS.forEach(function (t) {
+    TT.dashboard.register(t.id, function () {
+      var list = load('tracktify-' + t.id, []); if (!Array.isArray(list)) list = [];
+      var wk = Date.now() - 7 * 86400000;
+      var stats = [
+        { label: 'Entries', value: list.length, tone: '' },
+        { label: 'This week', value: list.filter(function (e) { return (e.createdAt || 0) >= wk; }).length, tone: '' }
+      ];
+      if (t.stat) { try { (t.stat(list) || []).forEach(function (s) { stats.push({ label: s.l, value: s.n, tone: '' }); }); } catch (_) {} }
+      var recent = list.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 5)
+        .map(function (e) { return { title: e._title || '(entry)', ts: e.createdAt || 0, meta: '' }; });
+      return {
+        name: t.name, icon: t.icon, view: t.id, stats: stats.slice(0, 3), recent: recent, upcoming: [],
+        headline: list.length ? list.length + (list.length === 1 ? ' entry' : ' entries') + ' in ' + t.name : ''
+      };
+    });
+  });
+
   /* ============================================================
      Inject sidebar nav buttons + per-tracker view containers
   ============================================================ */
@@ -281,6 +311,38 @@
     return c;
   }
 
+  /* ---- Inline SVG trend chart for time-series trackers ---- */
+  function entryDate(e) {
+    return e.date || e.start || (e.createdAt ? new Date(e.createdAt).toISOString().slice(0, 10) : '');
+  }
+  function fmtNum(n) { return (Math.round(n * 10) / 10).toString(); }
+  function trendChart(t, list) {
+    if (!t.chart) return '';
+    var pts = list.map(function (e) {
+      var v = t.chart.value(e), d = entryDate(e);
+      return (v == null || isNaN(v) || !d) ? null : { d: d, v: v, ts: e.createdAt || 0 };
+    }).filter(Boolean).sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : (a.ts - b.ts); }).slice(-30);
+    if (pts.length < 2) return '';
+    var W = 600, H = 120, P = 12, n = pts.length;
+    var vals = pts.map(function (p) { return p.v; });
+    var rmin = Math.min.apply(null, vals), rmax = Math.max.apply(null, vals);
+    var min = rmin, max = rmax; if (min === max) { min -= 1; max += 1; }
+    function X(i) { return P + (W - 2 * P) * (n === 1 ? 0.5 : i / (n - 1)); }
+    function Y(v) { return P + (H - 2 * P) * (1 - (v - min) / (max - min)); }
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.v).toFixed(1); }).join(' ');
+    var area = line + ' L' + X(n - 1).toFixed(1) + ' ' + (H - P) + ' L' + X(0).toFixed(1) + ' ' + (H - P) + ' Z';
+    var dots = pts.map(function (p, i) { return '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="2.5" fill="' + t.color + '" />'; }).join('');
+    return '<div class="trend-card">' +
+      '<div class="trend-head"><span class="trend-title">' + esc(t.chart.label || t.name) + '</span>' +
+        '<span class="trend-range">' + esc(fmtDate(pts[0].d)) + ' → ' + esc(fmtDate(pts[n - 1].d)) + '</span></div>' +
+      '<svg class="trend-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' + esc(t.chart.label || 'trend') + '">' +
+        '<path d="' + area + '" fill="' + t.color + '" opacity="0.12" />' +
+        '<path d="' + line + '" fill="none" stroke="' + t.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />' + dots +
+      '</svg>' +
+      '<div class="trend-foot"><span>min ' + fmtNum(rmin) + '</span><span>latest ' + fmtNum(pts[n - 1].v) + '</span><span>max ' + fmtNum(rmax) + '</span></div>' +
+    '</div>';
+  }
+
   function entryRow(t, e) {
     var li = document.createElement('li');
     li.className = 'exp-row';
@@ -329,6 +391,7 @@
       '<div class="page-top"><div><h1>' + t.icon + ' ' + esc(t.name) + '</h1><p>' + esc(t.sub || '') + '</p></div>' +
         '<div class="page-top-right"><button class="btn-add" data-a="add">+ Add</button></div></div>' +
       '<div class="summary">' + summaryChips(t, list) + '</div>' +
+      trendChart(t, list) +
       '<input class="txn-search" id="exsearch-' + t.id + '" type="search" placeholder="🔍  Search entries..." value="' + esc(q) + '" style="margin-bottom:14px" />' +
       '<div class="empty' + (list.length ? '' : ' show') + '"><div class="empty-icon">' + t.icon + '</div><h2>No entries yet</h2>' +
         '<p>Add your first ' + esc(t.name) + ' entry.</p><button class="btn-add" data-a="add2">+ Add</button></div>' +
@@ -385,10 +448,9 @@
     Array.prototype.forEach.call(customNav.querySelectorAll('.nav-item[data-custom-id]'), function (b) { nav.insertBefore(b, customNav); });
   }
 
-  // Ensure every group item is draggable and has a favorite-star button.
+  // Ensure every group item has a favorite-star button and a drag grip.
   function ensureControls() {
     groupItems().forEach(function (it) {
-      it.setAttribute('draggable', 'true');
       var star = it.querySelector('.nav-fav');
       if (!star) {
         star = document.createElement('button');
@@ -406,6 +468,15 @@
         it.appendChild(star);
       }
       star.classList.toggle('on', isFav(keyOf(it)));
+      if (!it.querySelector('.nav-grip')) {
+        var grip = document.createElement('button');
+        grip.type = 'button';
+        grip.className = 'nav-grip';
+        grip.setAttribute('aria-label', 'Drag to reorder');
+        grip.setAttribute('tabindex', '-1');
+        grip.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); });
+        it.appendChild(grip);
+      }
     });
   }
 
@@ -432,32 +503,49 @@
   var _bindNav = TT.bindNav;
   TT.bindNav = function () { if (_bindNav) _bindNav(); normalizeCustoms(); ensureControls(); applySort(); };
 
-  /* ---- drag-to-reorder (a manual drag switches sort to 'custom') ---- */
-  var dragEl = null;
-  nav.addEventListener('dragstart', function (e) {
-    var it = e.target && e.target.closest ? e.target.closest('.nav-item[data-tracker]') : null;
+  /* ---- drag-to-reorder via the grip (pointer events: mouse + touch) ----
+     Dragging starts only from the grip handle (which has touch-action:none), so
+     touch users can still scroll the sidebar normally everywhere else. A manual
+     reorder switches the sort to 'custom' and persists the new order. ---- */
+  var dragEl = null, dragging = false, ptrId = null, startY = 0;
+  function commitOrder() { setSort('custom'); store('tracktify-navorder', groupItems().map(keyOf)); }
+  function suppressNextClick(el) {
+    var h = function (ev) { ev.stopPropagation(); ev.preventDefault(); el.removeEventListener('click', h, true); };
+    el.addEventListener('click', h, true);
+    setTimeout(function () { el.removeEventListener('click', h, true); }, 400);
+  }
+  nav.addEventListener('pointerdown', function (e) {
+    var grip = e.target && e.target.closest ? e.target.closest('.nav-grip') : null;
+    if (!grip) return;
+    var it = grip.closest('.nav-item[data-tracker]');
     if (!it || it.parentNode !== nav || it.getAttribute('data-tracker') === 'dashboard') return;
-    dragEl = it;
-    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', keyOf(it)); } catch (_) {}
-    setTimeout(function () { it.classList.add('dragging'); }, 0);
-  });
-  nav.addEventListener('dragover', function (e) {
-    if (!dragEl) return;
-    var it = e.target && e.target.closest ? e.target.closest('.nav-item[data-tracker]') : null;
-    if (!it || it.parentNode !== nav) return;
+    dragEl = it; ptrId = e.pointerId; startY = e.clientY; dragging = false;
+    try { grip.setPointerCapture(ptrId); } catch (_) {}
     e.preventDefault();
-    if (it === dragEl || it.getAttribute('data-tracker') === 'dashboard') return;
-    var r = it.getBoundingClientRect();
-    if ((e.clientY - r.top) / r.height > 0.5) it.after(dragEl); else it.before(dragEl);
   });
-  nav.addEventListener('drop', function (e) { if (dragEl) e.preventDefault(); });
-  nav.addEventListener('dragend', function () {
-    if (!dragEl) return;
-    dragEl.classList.remove('dragging');
-    dragEl = null;
-    setSort('custom');
-    store('tracktify-navorder', groupItems().map(keyOf));
+  nav.addEventListener('pointermove', function (e) {
+    if (!dragEl || e.pointerId !== ptrId) return;
+    if (!dragging) {
+      if (Math.abs(e.clientY - startY) < 5) return;        // ignore tiny jitters
+      dragging = true; dragEl.classList.add('dragging'); document.body.style.userSelect = 'none';
+    }
+    e.preventDefault();
+    var under = document.elementFromPoint(e.clientX, e.clientY);
+    var over = under && under.closest ? under.closest('.nav-item[data-tracker]') : null;
+    if (over && over.parentNode === nav && over !== dragEl && over.getAttribute('data-tracker') !== 'dashboard') {
+      var r = over.getBoundingClientRect();
+      if ((e.clientY - r.top) / r.height > 0.5) over.after(dragEl); else over.before(dragEl);
+    }
   });
+  function endDrag(e) {
+    if (!dragEl || (e && e.pointerId !== ptrId)) return;
+    var was = dragging, el = dragEl;
+    if (dragging) { dragEl.classList.remove('dragging'); document.body.style.userSelect = ''; }
+    dragEl = null; dragging = false; ptrId = null;
+    if (was) { commitOrder(); suppressNextClick(el); }
+  }
+  nav.addEventListener('pointerup', endDrag);
+  nav.addEventListener('pointercancel', endDrag);
 
   /* ---- sort dropdown in the sidebar header ---- */
   (function injectSortControl() {

@@ -40,7 +40,13 @@ if (JWT_SECRET === 'dev-insecure-secret-change-me') console.warn('⚠  TT_JWT_SE
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || '';
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
 const USE_REDIS = !!(UPSTASH_URL && UPSTASH_TOKEN);
-const REDIS_KEY = process.env.TT_REDIS_KEY || 'tracktify:db';
+const REDIS_KEY = process.env.TT_REDIS_KEY || 'tracktify:db';   // legacy single-blob key (kept as backup)
+// Per-user storage layout: a small `:meta` blob holds the users map; each user's
+// trackers live at `:user:<id>`. Writing one user no longer rewrites everyone's
+// data, shrinking the blast radius of a concurrent/last-write-wins overwrite.
+const REDIS_PREFIX = process.env.TT_REDIS_PREFIX || 'tracktify';
+const META_KEY = REDIS_PREFIX + ':meta';
+function userDataKey(uid) { return REDIS_PREFIX + ':user:' + uid; }
 if (!USE_REDIS && process.env.RENDER) console.warn('⚠  No UPSTASH_REDIS_REST_URL/TOKEN set — data is on the EPHEMERAL Render disk and WILL be lost on restart/redeploy. See DEPLOY.md.');
 
 const TYPES = {
@@ -85,26 +91,69 @@ function redis(cmd) {
 // start serving once the data is in hand (never race the first request).
 function loadDb() {
   if (USE_REDIS) {
-    return redis(['GET', REDIS_KEY])
-      .then(function (r) { if (r && r.result) { try { db = JSON.parse(r.result); } catch (e) {} } })
-      .catch(function (e) { console.error('⚠  Could not load from Redis — starting empty:', e.message); });
+    return redis(['GET', META_KEY]).then(function (r) {
+      if (r && r.result) {
+        // New per-user layout: read the meta blob, then each user's data key.
+        var meta; try { meta = JSON.parse(r.result); } catch (e) { meta = null; }
+        db = { users: (meta && meta.users) || {}, data: {} };
+        var uids = Object.keys(db.users).map(function (em) { return db.users[em].id; });
+        return Promise.all(uids.map(function (uid) {
+          return redis(['GET', userDataKey(uid)])
+            .then(function (ur) { db.data[uid] = (ur && ur.result) ? safeParse(ur.result, {}) : {}; })
+            .catch(function () { db.data[uid] = {}; });
+        }));
+      }
+      // No meta yet → migrate from the legacy single blob if present.
+      return redis(['GET', REDIS_KEY]).then(function (o) {
+        if (o && o.result) {
+          db = safeParse(o.result, { users: {}, data: {} });
+          console.warn('⤳  Migrating Redis storage to per-user keys…');
+          return migrateToPerUser(); // keeps the old blob intact as a backup
+        }
+        db = { users: {}, data: {} };
+      });
+    }).catch(function (e) { console.error('⚠  Could not load from Redis — starting empty:', e.message); db = { users: {}, data: {} }; });
   }
   try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { /* first run */ }
   return Promise.resolve();
 }
+function safeParse(s, fallback) { try { return JSON.parse(s); } catch (e) { return fallback; } }
+// One-time: split the in-memory db into meta + per-user keys. The legacy blob at
+// REDIS_KEY is deliberately NOT deleted, so a botched migration can't lose data.
+function migrateToPerUser() {
+  var ops = [redis(['SET', META_KEY, JSON.stringify({ users: db.users })])];
+  Object.keys(db.data).forEach(function (uid) { ops.push(redis(['SET', userDataKey(uid), JSON.stringify(db.data[uid] || {})])); });
+  return Promise.all(ops)
+    .then(function () { console.warn('✓  Migrated ' + Object.keys(db.data).length + ' user(s). Legacy blob kept as backup at "' + REDIS_KEY + '".'); })
+    .catch(function (e) { console.error('⚠  Migration write failed (legacy blob still intact):', e.message); });
+}
 
-let writeTimer = null, dirty = false;
-function persist() { dirty = true; clearTimeout(writeTimer); writeTimer = setTimeout(writeNow, 150); }
+// Debounced, scoped persistence. We track which user buckets changed and whether
+// the users map (meta) changed, so a Redis flush only rewrites what's dirty.
+let writeTimer = null, fileDirty = false, metaDirty = false;
+const dirtyUsers = {};
+function schedule() { clearTimeout(writeTimer); writeTimer = setTimeout(writeNow, 150); }
+function persist(uid) { fileDirty = true; if (uid) dirtyUsers[uid] = true; schedule(); }      // a user's data changed
+function persistMeta() { fileDirty = true; metaDirty = true; schedule(); }                     // the users map changed
 function writeNow() {
-  if (!dirty) return Promise.resolve();
-  dirty = false;
-  const snapshot = JSON.stringify(db);
+  clearTimeout(writeTimer); writeTimer = null;
   if (USE_REDIS) {
-    return redis(['SET', REDIS_KEY, snapshot]).catch(function (e) { dirty = true; console.error('⚠  Redis persist failed:', e.message); });
+    var ops = [], wasMeta = metaDirty, uids = Object.keys(dirtyUsers);
+    if (metaDirty) { metaDirty = false; ops.push(redis(['SET', META_KEY, JSON.stringify({ users: db.users })])); }
+    uids.forEach(function (uid) { delete dirtyUsers[uid]; ops.push(redis(['SET', userDataKey(uid), JSON.stringify(db.data[uid] || {})])); });
+    if (!ops.length) return Promise.resolve();
+    return Promise.all(ops).catch(function (e) {
+      // Re-mark dirty so the next tick retries — never silently drop a write.
+      if (wasMeta) metaDirty = true; uids.forEach(function (uid) { dirtyUsers[uid] = true; });
+      console.error('⚠  Redis persist failed:', e.message);
+    });
   }
+  if (!fileDirty) return Promise.resolve();
+  fileDirty = false;
+  const snapshot = JSON.stringify(db);
   return new Promise(function (resolve) {
     const tmp = DATA_FILE + '.tmp';
-    fs.writeFile(tmp, snapshot, function (err) { if (!err) fs.rename(tmp, DATA_FILE, function () { resolve(); }); else { dirty = true; resolve(); } });
+    fs.writeFile(tmp, snapshot, function (err) { if (!err) fs.rename(tmp, DATA_FILE, function () { resolve(); }); else { fileDirty = true; resolve(); } });
   });
 }
 // Best-effort flush on shutdown so a write in the last debounce window isn't lost
@@ -154,6 +203,15 @@ function readBody(req) {
 }
 function pubUser(u) { return { id: u.id, name: u.name, email: u.email }; }
 function newSession(u) { return signJwt({ sub: u.id, name: u.name, exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 }); }
+function userById(id) { return Object.values(db.users).filter(function (x) { return x.id === id; })[0]; }
+// Recovery code: 16 chars from an unambiguous alphabet, shown grouped (AB3K-…).
+// We store only its scrypt hash; resets normalize input (strip dashes/case).
+function normCode(c) { return String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function genRecoveryCode() {
+  var A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', s = '';
+  for (var i = 0; i < 16; i++) { if (i && i % 4 === 0) s += '-'; s += A[crypto.randomInt(A.length)]; }
+  return s;
+}
 
 /* ---------------- Recurring catch-up (server-side; mirrors the client) -------
    Heavy historical materialization belongs on the server. amounts are integer
@@ -181,7 +239,7 @@ function recurringCatchup(uid) {
       created++; r.nextDate = addToDate(r.nextDate, r.frequency); guard++;
     }
   });
-  if (created) { bucket.expenses = txns; bucket.recurring = recurring; db.data[uid] = bucket; persist(); }
+  if (created) { bucket.expenses = txns; bucket.recurring = recurring; db.data[uid] = bucket; persist(uid); }
   return created;
 }
 
@@ -233,9 +291,10 @@ const server = http.createServer(function (req, res) {
           var email = String(b.email).toLowerCase().trim();
           if (db.users[email]) return json(res, 409, { error: 'email exists' });
           var pw = hashPw(b.password);
-          var u = { id: crypto.randomUUID(), name: String(b.name).trim(), email: email, salt: pw.salt, hash: pw.hash };
-          db.users[email] = u; db.data[u.id] = db.data[u.id] || {}; persist();
-          return json(res, 200, { token: newSession(u), user: pubUser(u) });
+          var code = genRecoveryCode(), rc = hashPw(normCode(code));
+          var u = { id: crypto.randomUUID(), name: String(b.name).trim(), email: email, salt: pw.salt, hash: pw.hash, recovery: { salt: rc.salt, hash: rc.hash } };
+          db.users[email] = u; db.data[u.id] = db.data[u.id] || {}; persistMeta(); persist(u.id);
+          return json(res, 200, { token: newSession(u), user: pubUser(u), recoveryCode: code });
         });
       }
       if (parts[2] === 'login' && req.method === 'POST') {
@@ -247,8 +306,31 @@ const server = http.createServer(function (req, res) {
       }
       if (parts[2] === 'me' && req.method === 'GET') {
         var p = authOf(req); if (!p) return json(res, 401, { error: 'unauthorized' });
-        var u = Object.values(db.users).filter(function (x) { return x.id === p.sub; })[0];
+        var u = userById(p.sub);
         return u ? json(res, 200, { user: pubUser(u) }) : json(res, 401, { error: 'unauthorized' });
+      }
+      // Recovery code: GET reports whether one is set; POST (re)generates and
+      // returns it once. Both require a valid session.
+      if (parts[2] === 'recovery') {
+        var pr = authOf(req); if (!pr) return json(res, 401, { error: 'unauthorized' });
+        var ur = userById(pr.sub); if (!ur) return json(res, 401, { error: 'unauthorized' });
+        if (req.method === 'GET') return json(res, 200, { has: !!ur.recovery });
+        if (req.method === 'POST') {
+          var code = genRecoveryCode(), rc = hashPw(normCode(code));
+          ur.recovery = { salt: rc.salt, hash: rc.hash }; persistMeta();
+          return json(res, 200, { code: code });
+        }
+        return json(res, 404, { error: 'not found' });
+      }
+      // Reset password with a recovery code (no session needed).
+      if (parts[2] === 'reset' && req.method === 'POST') {
+        return readBody(req).then(function (b) {
+          var u = db.users[String(b.email || '').toLowerCase().trim()];
+          if (!u || !u.recovery || !b.code || !verifyPw(normCode(b.code), u.recovery.salt, u.recovery.hash)) return json(res, 401, { error: 'invalid email or recovery code' });
+          if (!b.password) return json(res, 400, { error: 'missing password' });
+          var pw = hashPw(b.password); u.salt = pw.salt; u.hash = pw.hash; persistMeta();
+          return json(res, 200, { token: newSession(u), user: pubUser(u) });
+        });
       }
       if (parts[2] === 'logout') return json(res, 200, { ok: true }); // stateless JWT
       return json(res, 404, { error: 'not found' });
@@ -268,7 +350,7 @@ const server = http.createServer(function (req, res) {
       const resource = parts[1];
       db.data[uid] = db.data[uid] || {};
       if (req.method === 'GET') return json(res, 200, db.data[uid][resource] != null ? db.data[uid][resource] : null);
-      if (req.method === 'PUT') return readBody(req).then(function (b) { db.data[uid][resource] = b; persist(); return json(res, 200, { ok: true }); });
+      if (req.method === 'PUT') return readBody(req).then(function (b) { db.data[uid][resource] = b; persist(uid); return json(res, 200, { ok: true }); });
     }
     return json(res, 404, { error: 'not found' });
   }

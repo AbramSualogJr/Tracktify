@@ -51,6 +51,24 @@
     setTimeout(function () { t.classList.remove('show'); setTimeout(function () { t.remove(); }, 250); }, 2600);
   }
 
+  // Toast with an action button (e.g. "Undo"). Stays longer; the action and the
+  // auto-dismiss both clear it exactly once.
+  function toastAction(msg, actionLabel, onAction, ms) {
+    var stack = document.getElementById('toastStack');
+    if (!stack) return;
+    var t = document.createElement('div');
+    t.className = 'toast toast-action';
+    var span = document.createElement('span'); span.textContent = msg; t.appendChild(span);
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'toast-btn'; btn.textContent = actionLabel;
+    var done = false;
+    function dismiss() { if (done) return; done = true; t.classList.remove('show'); setTimeout(function () { t.remove(); }, 250); }
+    btn.addEventListener('click', function () { dismiss(); try { onAction(); } catch (e) {} });
+    t.appendChild(btn);
+    stack.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(dismiss, ms || 6000);
+  }
+
   /* ---------- Namespace ---------- */
   // userId/token are populated by auth.js before any module reads data.
   var TT = window.TT = {
@@ -58,7 +76,7 @@
     view: 'dashboard',   // Dashboard is the default homepage
     mobileAdd: {},
     userId: null,
-    esc: esc, uid: uid, fmtDate: fmtDate, toast: toast
+    esc: esc, uid: uid, fmtDate: fmtDate, toast: toast, toastAction: toastAction
   };
 
   // --- Dashboard provider registry (additive) -------------------------------
@@ -84,7 +102,8 @@
     'tracktify-mood', 'tracktify-weight', 'tracktify-reading',
     'tracktify-meds', 'tracktify-travel', 'tracktify-mindful', 'tracktify-screen',
     'tracktify-custom-defs', 'tracktify-custom-data',
-    'tracktify-navorder', 'tracktify-navsort', 'tracktify-navfavs'
+    'tracktify-navorder', 'tracktify-navsort', 'tracktify-navfavs',
+    'tracktify-reminders'
   ];
   TT.RESOURCE_KEYS = RESOURCE_KEYS;
 
@@ -107,21 +126,52 @@
     var v = cacheGet(key);
     return (v === undefined || v === null) ? fallback : v;
   }
-  function store(key, val) {
-    // OPTIMISTIC: commit to local cache synchronously so the UI is zero-latency.
+
+  // Low-level write: commit to cache synchronously (zero-latency UI) and persist
+  // in the background. Shared by store() and the import path.
+  function putResource(key, val) {
     var prev = cacheGet(key);
     cacheSet(key, val);
-    // In cloud mode, persist in the background and roll back the cache on failure.
     if (TT.MODE === 'http') backgroundSync(key, val, prev);
+    return prev;
+  }
+
+  // Resources where a length decrease is NOT a user "delete" (settings objects,
+  // sidebar prefs, favorites) — never offer undo for those.
+  var UNDO_EXCLUDE = /(settings|navorder|navfavs|navsort|dash-ai|custom-defs|custom-data)/;
+  var importing = false;
+
+  function store(key, val) {
+    var prev = putResource(key, val);
+    // A content array that just got shorter = a delete → offer a one-tap restore.
+    if (!importing && !UNDO_EXCLUDE.test(key) && Array.isArray(prev) && Array.isArray(val) && val.length < prev.length) {
+      var snapshot = prev;
+      toastAction('Item deleted', 'Undo', function () { putResource(key, snapshot); location.reload(); });
+    }
   }
   TT.load = load;
   TT.store = store;
 
+  /* ---------- Sync state (online + pending writes) for the UI indicator ---------- */
+  var pendingWrites = 0;
+  var online = (typeof navigator !== 'undefined') ? navigator.onLine : true;
+  function emitSyncState() {
+    document.dispatchEvent(new CustomEvent('tt:syncstate', { detail: { pending: pendingWrites, online: online } }));
+  }
+  TT.getSyncState = function () { return { pending: pendingWrites, online: online }; };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', function () { online = true; emitSyncState(); });
+    window.addEventListener('offline', function () { online = false; emitSyncState(); });
+  }
+
   function backgroundSync(key, val, prev) {
-    // Fire-and-forget mutation. The local cache already reflects the change;
-    // if the server rejects it we restore the snapshot and tell the user.
+    // Optimistic: the local cache already reflects the change. Track the in-flight
+    // write for the indicator; on failure restore the snapshot and tell the user.
+    pendingWrites++; emitSyncState();
     TT.api.request('/' + resourcePath(key), { method: 'PUT', body: val })
+      .then(function () { pendingWrites = Math.max(0, pendingWrites - 1); emitSyncState(); })
       .catch(function () {
+        pendingWrites = Math.max(0, pendingWrites - 1); emitSyncState();
         cacheSet(key, prev); // rollback to last-known-good
         toast('Could not sync — change rolled back', 'error');
         document.dispatchEvent(new CustomEvent('tt:rollback', { detail: key }));
@@ -190,6 +240,27 @@
         if (legacy != null && localStorage.getItem(phys) == null) localStorage.setItem(phys, legacy);
       });
       localStorage.setItem('tt:migrated', '1');
+    },
+    // ---- Self-serve backup ----------------------------------------------------
+    // Snapshot every resource into a single portable object (downloaded as JSON).
+    exportAll: function () {
+      var out = {};
+      RESOURCE_KEYS.forEach(function (key) { var v = cacheGet(key); if (v !== undefined && v !== null) out[key] = v; });
+      return { app: 'tracktify', version: 1, exportedAt: new Date().toISOString(), data: out };
+    },
+    // Restore from a backup object. Writes through the normal sync path (so the
+    // cloud is updated too) but suppresses the per-delete undo prompts. Returns
+    // the number of resources restored; caller reloads to re-read fresh state.
+    importAll: function (payload) {
+      if (!payload || !payload.data || typeof payload.data !== 'object') throw new Error('Invalid backup file');
+      importing = true;
+      var n = 0;
+      try {
+        Object.keys(payload.data).forEach(function (key) {
+          if (RESOURCE_KEYS.indexOf(key) >= 0) { putResource(key, payload.data[key]); n++; }
+        });
+      } finally { importing = false; }
+      return n;
     }
   };
 
